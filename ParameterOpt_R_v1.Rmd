@@ -1,0 +1,209 @@
+---
+title: "Parameter optimzation with R"
+author: "Nadia Fernandez"
+date: "3/5/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+#Set up your working directory for knitr [fill in your local path to your working directory]:
+knitr::opts_knit$set(root.dir = '~/Desktop/RAD/streamlining_test_feb2020/metrics/', cache=TRUE)
+```
+
+**BEFORE YOU CONTINUE**
+
+1.  a) Be sure that you have ran the prep script "metrics4Rmarkdown.sh". This script is meant to prep some of these last data types necessary to visualize the output using this script. This will upload other data types into the "metrics" folder that is in the original pipeline.
+    b) Be sure that you have the clustopt folder downloaded locally. The structure of your layout should look like this: 
+        1. metrics directory
+            --> clustOpt directory
+            --> metrics4Rmarkdown.sh script
+
+2. Next, make sure that these files below exist into the "metrics" folder.   into the necessary to your local hardrive! This will be a much smoother process than trying to complete on the cluster. The
+  - all population_metrics_r80.csv files 
+  - all variant_sites.tsv files
+  - all all_sites.tsv files
+  - vcf (snps.vcf) files
+
+3. Download the entire "metrics" folder to your local hardrive. This will be a much smoother process than trying to complete on the cluster (though could opt to use R-studio interactive session on the cluster if you wished).
+
+
+### Metric 1: Total number of SNPs
+**Expectation**: When the clustering threshold is too high (i.e. low M=n value), then loci will be oversplit and we expect to find fewer SNPs. When the clustering threshold is too low (i.e. high M=n value), we expect that paralogs will be incorrectly collapsed into loci. This inflates heterozygosity at the locus and may lead to intrinsic filtering of paralogs down the line. This led McCartney-Melstad et. al. (2019) to deduce that the number of SNPs will rise as loci are less oversplit, and then fall once they start to be undersplit, leaving the optimal parameter value that which gives the highest number of SNPs. However, in Stacks, the max_obs_het filter must be manually set for Stacks to filter loci based on inflated heterozygosity levels (see Julian Catchen’s response to a Google question for more info). Without setting that filter, we expect that the number of SNPs will increase, and then asymptote.
+
+```{r, echo=FALSE, fig.align="center"}
+################### Total SNPs #######################
+## Import the data
+M1_pop <- read.csv("m3_M1_N1_population_metrics.csv", header=TRUE)
+M2_pop <- read.csv("m3_M2_N2_population_metrics.csv", header=TRUE)
+M3_pop <- read.csv("m3_M3_N3_population_metrics.csv", header=TRUE)
+M4_pop <- read.csv("m3_M4_N4_population_metrics.csv", header=TRUE)
+M5_pop <- read.csv("m3_M5_N5_population_metrics.csv", header=TRUE)
+M6_pop <- read.csv("m3_M6_N6_population_metrics.csv", header=TRUE)
+M7_pop <- read.csv("m3_M7_N7_population_metrics.csv", header=TRUE)
+M8_pop <- read.csv("m3_M8_N8_population_metrics.csv", header=TRUE)
+M9_pop <- read.csv("m3_M9_N9_population_metrics.csv", header=TRUE)
+all_pop <- rbind(M1_pop, M2_pop, M3_pop, M4_pop, M5_pop, M6_pop, M7_pop, M8_pop, M9_pop)
+
+M_values <- c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9")
+rownames(all_pop) <- c(M_values)
+
+## Graph the number of SNPs by parameter setting
+plot(all_pop$SNPs, xaxt="n", xlab='Parameter values', ylab="SNPs", pch=16, col="dark red", ylim=c(min(all_pop$SNPs),max(all_pop$SNPs))) #ylim will vary depending on the data
+axis(1, at=1:9, labels=rownames(all_pop))
+title("SNPs by Parameter Values", line=.2)
+```
+
+### Metric 2: r80 loci
+**Expectation**: Paris et. al. (2017) explain that broadly shared polymorphic loci are unlikely to be derived from paralogous or repetitive sequence. Therefore, selecting loci for downstream analysis that are found in 80% of samples likely represents an efficient method of filtering the dataset for informative (and real!) variable regions.
+
+```{r, echo=FALSE, fig.align="center"}
+############ r80 Loci #################
+M1_r80 <- read.csv("m3_M1_N1_population_metrics_r80.csv", header=TRUE)
+M2_r80 <- read.csv("m3_M2_N2_population_metrics_r80.csv", header=TRUE)
+M3_r80 <- read.csv("m3_M3_N3_population_metrics_r80.csv", header=TRUE)
+M4_r80 <- read.csv("m3_M4_N4_population_metrics_r80.csv", header=TRUE)
+M5_r80 <- read.csv("m3_M5_N5_population_metrics_r80.csv", header=TRUE)
+M6_r80 <- read.csv("m3_M6_N6_population_metrics_r80.csv", header=TRUE)
+M7_r80 <- read.csv("m3_M7_N7_population_metrics_r80.csv", header=TRUE)
+M8_r80 <- read.csv("m3_M8_N8_population_metrics_r80.csv", header=TRUE)
+M9_r80 <- read.csv("m3_M9_N9_population_metrics_r80.csv", header=TRUE)
+all_r80 <- rbind(M1_r80, M2_r80, M3_r80, M4_r80, M5_r80, M6_r80, M7_r80, M8_r80, M9_r80)
+M_values <- c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9")
+rownames(all_r80) <- c(M_values)
+
+##Graphs the number of r80 loci by parameter value
+plot(all_r80$loci, xaxt="n", xlab='Parameter values', ylab="Number of Loci", pch=16, col="purple", ylim=c(min(all_r80$loci),max(all_r80$loci)))
+axis(1, at=1:9, labels=rownames(all_r80))
+title("r80 loci by Parameter Values", line=.2)
+```
+
+
+### Metric 3: Individual heterozygosity
+
+**Expectation**: Similar to the total number of SNPs, we expect that heterozygosity will be lowest when clustering thresholds are most stringent (M=n=1). As the threshold is relaxed, we expect heterozygosity to increase. However, assuming we set the max_obs_het filter, we expect heterozygosity to drop again when paralogous loci are collapsed together and thus have very high heterozygosity (see Julian Catchen’s explanation of the filters in the populations program). If we do not set --max_obs_het or another similar flag, then we may expect to see an asymptote instead of a drop, since these loci won’t be filtered.
+
+#### 1. Mean individual heterozygosity of variant sites
+```{r, echo=FALSE, fig.align="center"}
+################ Individual heterozygosity ###################
+#Variant sites
+M1_het <- read.table("m3_M1_n1_variant_sites.tsv", sep="\t", header=TRUE)
+M2_het <- read.table("m3_M2_n2_variant_sites.tsv", sep="\t", header=TRUE)
+M3_het <- read.table("m3_M3_n3_variant_sites.tsv", sep="\t", header=TRUE)
+M4_het <- read.table("m3_M4_n4_variant_sites.tsv", sep="\t", header=TRUE)
+M5_het <- read.table("m3_M5_n5_variant_sites.tsv", sep="\t", header=TRUE)
+M6_het <- read.table("m3_M6_n6_variant_sites.tsv", sep="\t", header=TRUE)
+M7_het <- read.table("m3_M7_n7_variant_sites.tsv", sep="\t", header=TRUE)
+M8_het <- read.table("m3_M8_n8_variant_sites.tsv", sep="\t", header=TRUE)
+M9_het <- read.table("m3_M9_n9_variant_sites.tsv", sep="\t", header=TRUE)
+
+num_samps <- nrow(M1_het) #Number of samples (in this case, each sample is from a different population so received a different heterozygosity score)
+Hetero <- c(M1_het$Obs_Het, M2_het$Obs_Het, M3_het$Obs_Het, M4_het$Obs_Het, M5_het$Obs_Het, M6_het$Obs_Het, M7_het$Obs_Het, M8_het$Obs_Het, M9_het$Obs_Het)
+M_values <- c(rep("M1", num_samps), rep("M2", num_samps), rep("M3", num_samps), rep("M4", num_samps), rep("M5", num_samps), rep("M6", num_samps), rep("M7", num_samps), rep("M8", num_samps), rep("M9", num_samps))
+Hetero <- data.frame(cbind(Hetero, M_values))
+colnames(Hetero)[1] <- "Obs_het"
+#head(Hetero)
+
+boxplot(as.numeric(as.character(Obs_het)) ~ M_values, data=Hetero, xlab="Parameter values", ylab="Observed heterozygosity", main="Observed heterozygosity of variant sites\nby parameter values")
+```
+
+#### 2. Mean individual heterozygosity of all sites
+```{r, echo=FALSE, fig.align="center"}
+#All sites
+M1_het <- read.table("m3_M1_n1_all_sites.tsv", sep="\t", header=TRUE)
+M2_het <- read.table("m3_M2_n2_all_sites.tsv", sep="\t", header=TRUE)
+M3_het <- read.table("m3_M3_n3_all_sites.tsv", sep="\t", header=TRUE)
+M4_het <- read.table("m3_M4_n4_all_sites.tsv", sep="\t", header=TRUE)
+M5_het <- read.table("m3_M5_n5_all_sites.tsv", sep="\t", header=TRUE)
+M6_het <- read.table("m3_M6_n6_all_sites.tsv", sep="\t", header=TRUE)
+M7_het <- read.table("m3_M7_n7_all_sites.tsv", sep="\t", header=TRUE)
+M8_het <- read.table("m3_M8_n8_all_sites.tsv", sep="\t", header=TRUE)
+M9_het <- read.table("m3_M9_n9_all_sites.tsv", sep="\t", header=TRUE)
+
+num_samps <- nrow(M1_het) #Number of samples (in this case, each sample is from a different population so received a different heterozygosity score)
+Hetero <- c(M1_het$Obs_Het, M2_het$Obs_Het, M3_het$Obs_Het, M4_het$Obs_Het, M5_het$Obs_Het, M6_het$Obs_Het, M7_het$Obs_Het, M8_het$Obs_Het, M9_het$Obs_Het)
+M_values <- c(rep("M1", num_samps), rep("M2", num_samps), rep("M3", num_samps), rep("M4", num_samps), rep("M5", num_samps), rep("M6", num_samps), rep("M7", num_samps), rep("M8", num_samps), rep("M9", num_samps))
+Hetero <- data.frame(cbind(Hetero, M_values))
+colnames(Hetero)[1] <- "Obs_het"
+#head(Hetero)
+
+boxplot(as.numeric(as.character(Obs_het)) ~ M_values, data=Hetero, xlab="Parameter values", ylab="Observed heterozygosity", main="Observed heterozygosity for all sites\nby parameter values")
+```
+
+### Metric 4: Cumulative variance in PCAs
+
+**Expectation**: We would expect that the fraction of the summed variance explained by the first few principal components to increase with clustering threshold (M; because the amount of data generally increases with clustering threshold) until a certain threshold is reached. When that threshold is reached, a bias from oversplitting more strongly influences the results, after which the proportion of variance explained by those principal components should decrease. The number of PCs should be chosen based on hierarchical population structure and other population information of the species.
+
+```{r, echo=FALSE, fig.align="center", message=FALSE}
+library(ggplot2)
+
+pc2 <- read.table("PCAplot2.txt",sep="")
+pc3 <- read.table("PCAplot3.txt",sep="")
+pc4 <- read.table("PCAplot5.txt",sep="")
+pc5 <- read.table("PCAplot7.txt",sep="")
+
+# reverse the order of the rows
+pc2 <- pc2[nrow(pc2):1, ]
+pc3 <- pc3[nrow(pc3):1, ]
+pc4 <- pc4[nrow(pc4):1, ]
+pc5 <- pc5[nrow(pc5):1, ]
+
+# lock in factor level order (otherwise ggplot2 will plot in a different order)
+pc2$V1 <- factor(pc2$V1, levels = pc2$V1)
+pc3$V1 <- factor(pc3$V1, levels = pc3$V1)
+pc4$V1 <- factor(pc4$V1, levels = pc4$V1)
+pc5$V1 <- factor(pc5$V1, levels = pc5$V1)
+
+M_values <- c("M9", "M8", "M7", "M6", "M5", "M4", "M3", "M2", "M1")
+
+#Need to add label to overall graph
+
+# plot results using ggplot
+plot.pc2 <- ggplot(pc2, aes(x= pc2$V1, y= pc2$V2)) + geom_point()
+plot.pc2 <-plot.pc2 + theme_bw() + theme(axis.text.x = element_text(face="bold", size=10, angle=45, hjust=1))+ theme(axis.text.y = element_text(face="bold", size=10)) + ggtitle("2 PCs") + theme(plot.title= element_text(hjust = 0.5))+ 
+  ylab("Cumulative variance") + xlab("") +
+  scale_x_discrete(labels = M_values)
+
+plot.pc3 <- ggplot(pc3, aes(x= pc3$V1, y= pc3$V2)) + geom_point()
+plot.pc3 <-plot.pc3 + theme_bw() + theme(axis.text.x = element_text(face="bold", size=10, angle=45, hjust=1))+ theme(axis.text.y = element_text(face="bold", size=10)) + ggtitle("3 PCs") + theme(plot.title= element_text(hjust = 0.5)) +
+ylab("Cumulative variance") + xlab("") +
+  scale_x_discrete(labels = M_values)
+
+plot.pc4 <- ggplot(pc4, aes(x= pc4$V1, y= pc4$V2)) + geom_point()
+plot.pc4 <-plot.pc4 + theme_bw() + theme(axis.text.x = element_text(face="bold", size=10, angle=45, hjust=1))+ theme(axis.text.y = element_text(face="bold", size=10)) + ggtitle("4 PCs") + theme(plot.title= element_text(hjust = 0.5))+ ylab("Cumulative variance") + xlab("") + 
+  scale_x_discrete(labels = M_values)
+
+plot.pc5 <- ggplot(pc5, aes(x= pc5$V1, y= pc5$V2)) + geom_point()
+plot.pc5 <-plot.pc5 + theme_bw() + theme(axis.text.x = element_text(face="bold", size=10, angle=45, hjust=1))+ theme(axis.text.y = element_text(face="bold", size=10)) + ggtitle("5 PCs") + theme(plot.title= element_text(hjust = 0.5))+ ylab("Cumulative variance") + xlab("") +
+  scale_x_discrete(labels = M_values)
+
+# merge plots together
+require(gridExtra)
+grid.arrange(plot.pc2, plot.pc3, plot.pc4, plot.pc5, ncol=2,nrow=2)
+```
+
+### Metric 5: Data missingness vs. pairwise genetic similarity
+
+
+#### 1. Generate heatmaps of pairwise missingness that are clustered by genetic similarity
+
+**Expectation**: We would expect that individuals with more complete sets of data (less missing data) would have more genetic similiarity, thus have a higher value of correlation (more darker blue). We can use this to compare the degree of pairwise data missingness among samples. Things that can potentially affect higher amounts of missing data can include low coverage or potential oversplitting (which occurs with higher clustering thresholds, so data missingness may be correlated with oversplitting).
+
+The heatmaps are generated from the previous script "metrics4Rmarkdown.sh" that used analyses from the clustOpt folder. For right now, please take those pdf files in the metrics folder, copy and paste them into a word document (or another platform that can merge pdf documents) for review.
+
+*If someone can think of an reliable method to implement PDFs into HTMLs R markdown files, please feel free to optize that here.The method of importing with knitr::include_graphs has been tried already.* 
+
+#### 2. Calculate pairwise missingness correlations as a function of genetic distance
+
+**Expectation**: Pearson’s correlation coefficients are calculated between genetic dissimilarity and pairwise missingness at different clustering thresholds. We expect that the optimal clustering threshold should be at or near the point when this correlation begins to steeply increase.
+
+```{r, echo=FALSE, fig.align="center"}
+data <-read.table("missingnessHeatMaps_correlations.txt", sep="")
+
+M_values <- c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9")
+data <- cbind(data,M_values)
+
+library(ggplot2)
+plot.data <- ggplot(data, aes(x= data$M_values, y= data$V10)) + geom_point()
+plot.data + theme_bw() + theme(axis.text.x = element_text(face="bold", size=10)) + theme(axis.text.y = element_text(face="bold", size=10)) + ggtitle("Correlation (PCC) between missingness and genetic similarity") + theme(plot.title= element_text(hjust = 0.5))+ ylab("Correlation value") + xlab("Parameters")
+```
